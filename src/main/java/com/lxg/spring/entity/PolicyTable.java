@@ -16,13 +16,15 @@ public class PolicyTable {
 	
 
 	@Id
-	@GeneratedValue(strategy = IDENTITY)
+	//@GeneratedValue(strategy = IDENTITY)
 	@Column(name = "client_number")
 	public String clientNumber;
 	
-	@Column(name = "policy_id")
+	@Id
+	@Column(name = "policy_number")
 	public String policyId;
 	
+	@Id
 	@Column(name = "rid")
 	public String rid;
 	
@@ -35,8 +37,14 @@ public class PolicyTable {
 	@Column(name = "currency")
 	public String currency;
 	
-	@Column(name = "summary")
+	@Column(name = "installed_premium")
 	public String summary;
+
+	@Column(name = "issue_date")
+	public String issueDate;
+	
+	@Column(name = "product_type")
+	public String productType;
 
 	
 	public String getClientNumber() {
@@ -94,5 +102,22 @@ public class PolicyTable {
 	public void setSummary(String summary) {
 		this.summary = summary;
 	}
+	
+	public String getIssueDate() {
+		return issueDate;
+	}
+
+	public void setIssueDate(String issueDate) {
+		this.issueDate = issueDate;
+	}
+
+	public String getProductType() {
+		return productType;
+	}
+
+	public void setProductType(String productType) {
+		this.productType = productType;
+	}
+
 
 }

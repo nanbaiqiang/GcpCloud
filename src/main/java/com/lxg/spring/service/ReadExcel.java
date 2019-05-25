@@ -17,13 +17,17 @@ import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.acls.model.Sid;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.lxg.spring.dao.ClientRepository;
 import com.lxg.spring.dao.FileUploadRepository;
+import com.lxg.spring.dao.PolicyRepository;
 import com.lxg.spring.entity.ClientTable;
 import com.lxg.spring.entity.FileUploadTable;
+import com.lxg.spring.entity.PolicyTable;
 
 @Service
 public class ReadExcel {
@@ -34,16 +38,19 @@ public class ReadExcel {
 	@Autowired
 	public FileUploadRepository fileUploadRepository;
 	
+	@Autowired
+	public PolicyRepository policyRepository;
+	
 	public Boolean excel(MultipartFile file) throws IOException {
 		
 		String fileName = file.getOriginalFilename();
 		String postfixName = fileName.substring(fileName.lastIndexOf(".") + 1);
 		
-		List<String[]> data = readExcel(file);
 		
 		if (fileName.contains("client")) {
 			
-			//list<ClientTable> clienList = readClient(file);
+			List<String[]> data = readExcel(file);
+			
 			if(data != null)
 			{
 				List<ClientTable>  clienList= toClientList(data);
@@ -51,10 +58,13 @@ public class ReadExcel {
 				{
 					clientRepository.save(clienList);
 					
+					Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+					String userName = authentication.getName();
+					
 					FileUploadTable fileUpload = new FileUploadTable();
 					fileUpload.setFileName(fileName);
 					fileUpload.setStatus("success");
-					fileUpload.setUplaodUser("986420965");
+					fileUpload.setUplaodUser(userName);
 					Date date = new Date();
 					SimpleDateFormat ssd = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
 					fileUpload.setDate(ssd.format(new Date()));
@@ -64,9 +74,32 @@ public class ReadExcel {
 			}
 			
 		} else if (fileName.contains("policy")) {
-			//readXlsx(file);
+			
+			List<String[]> data = readExcel(file);
+			
+			if(data != null)
+			{
+				List<PolicyTable>  policyList= toPolicyList(data);
+				if(policyList!=null)
+				{
+					policyRepository.save(policyList);
+					
+					Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+					String userName = authentication.getName();
+					
+					FileUploadTable fileUpload = new FileUploadTable();
+					fileUpload.setFileName(fileName);
+					fileUpload.setStatus("success");
+					fileUpload.setUplaodUser(userName);
+					Date date = new Date();
+					SimpleDateFormat ssd = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
+					fileUpload.setDate(ssd.format(new Date()));
+					
+					fileUploadRepository.save(fileUpload);
+				}
+			}
 		} else {
-			return null;
+			//two sheet
 		}
 		
 		return true;
@@ -103,40 +136,34 @@ public class ReadExcel {
 		return result;
 		
 	}
- 
-//	public static List<ClientTable>  readClient(MultipartFile fileName) throws IOException {
-//		InputStream is = fileName.getInputStream();
-//		@SuppressWarnings("resource")
-//		XSSFWorkbook xssfWorkbook = new XSSFWorkbook(is);
-//		ClientTable client = null;
-//		List<ClientTable> list = new ArrayList<ClientTable>();
-//		// Read the Sheet
-//		XSSFSheet xssfSheet = xssfWorkbook.getSheetAt(0);
-//		// Read the Row
-//		for (int rowNum = 2; rowNum <= xssfSheet.getLastRowNum(); rowNum++) {
-//			XSSFRow xssfRow = xssfSheet.getRow(rowNum);
-//			if (xssfRow != null) {
-//
-////				XSSFCell clientNumXss = xssfRow.getCell(1);
-////				String clientNum = getValue(clientNumXss);
-//				client = new ClientTable();
-//				client.setClientNum(xssfRow.getCell(1).getRawValue());
-//				client.setName(xssfRow.getCell(2).getRawValue());
-//				client.setIdType(xssfRow.getCell(3).getRawValue());
-//				client.setIdNum(xssfRow.getCell(4).getRawValue());
-//				client.setGender(xssfRow.getCell(5).getRawValue());
-//				client.setBrith(xssfRow.getCell(6).getRawValue());
-//				client.setCountry(xssfRow.getCell(7).getRawValue());
-//				client.setAdress(xssfRow.getCell(8).getRawValue());
-//				client.setMobil(xssfRow.getCell(9).getRawValue());
-//				list.add(client);
-//
-//			}
-//		}
-//		
-//		return list;
-//	}
+	public static List<PolicyTable>  toPolicyList (List<String[]> data)
+	{
+		List<PolicyTable> result =  new ArrayList<PolicyTable>();
+		PolicyTable policy = null;
+		for (int rowNum = 1; rowNum < data.size(); rowNum++) {
+			
+			if (data.get(rowNum) != null) {
 
+				if(data.get(rowNum)[0] == null || data.get(rowNum)[0].trim().length()==0)
+				{
+					continue;
+				}
+				
+				policy = new PolicyTable();
+				policy.setPolicyId(data.get(rowNum)[0]);
+				policy.setProductType(data.get(rowNum)[1]);
+				policy.setClientNumber(data.get(rowNum)[2]);
+				policy.setSummary(data.get(rowNum)[3]);
+				policy.setIssueDate(data.get(rowNum)[4]);
+				policy.setRid("00");
+
+				result.add(policy);
+
+			}
+		}
+		return result;
+		
+	}
 	
 	 private final static String xls = "xls";  
 	 private final static String xlsx = "xlsx";  

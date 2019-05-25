@@ -14,6 +14,8 @@ import javax.validation.Valid;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -26,12 +28,16 @@ import org.springframework.web.multipart.MultipartHttpServletRequest;
 
 import com.lxg.spring.dao.BarRepository;
 import com.lxg.spring.dao.ClientRepository;
+import com.lxg.spring.dao.FileUploadRepository;
 import com.lxg.spring.dao.LineRepository;
 import com.lxg.spring.dao.PolicyRepository;
 import com.lxg.spring.entity.BarTable;
 import com.lxg.spring.entity.ClientTable;
+import com.lxg.spring.entity.FileUploadTable;
 import com.lxg.spring.entity.LineTable;
 import com.lxg.spring.entity.PolicyTable;
+import com.lxg.spring.security.JsonUtil;
+import com.lxg.spring.service.BigQueryDemo;
 import com.lxg.spring.service.ReadExcel;
 import com.lxg.spring.vo.AreaVO;
 import com.lxg.spring.vo.BarVO;
@@ -58,11 +64,15 @@ public class PolicyController {
 	@Autowired
 	public ReadExcel readExcel;
 	
+	@Autowired
+	FileUploadRepository fileUploadRepository;
+	
     
 	@RequestMapping(value = "/v1/getLine", method = RequestMethod.GET)
 	@ResponseBody
     public ResponseEntity<List<LineVO>> getLine(@RequestParam("sysname") String sysname)
     {
+		//BigQueryDemo.implicit()
 		
 		List<LineTable> policyList = lineRepository.findLineTableByYear("2011");
 		List<LineVO> result = new ArrayList<LineVO>(); 
@@ -74,6 +84,9 @@ public class PolicyController {
 			result.add(lineItem);
 			
 		}
+//		String ss = JsonUtil.objectList2jsonArray(result);
+//		//System.out.println(ss);
+//		List<LineVO> result1 =  JsonUtil.json2ObjectList(ss);
 		
 		return ResponseEntity.ok().body(result);
     }
@@ -279,6 +292,19 @@ public Map<String, Object> uploadApkFile(HttpServletRequest request,HttpServletR
       }
 
     return json;
+}
+
+
+@RequestMapping(value = "/v1/getFilelist", method = RequestMethod.GET)
+@ResponseBody
+public ResponseEntity<List<FileUploadTable>> getFilelist()
+{
+	Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+	String userName = authentication.getName();
+	System.out.println(userName);
+	List<FileUploadTable> fileList = fileUploadRepository.findFileUploadTableByUplaodUser(userName);
+	
+	return ResponseEntity.ok().body(fileList);
 }
 
 }
