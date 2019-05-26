@@ -2,6 +2,7 @@ package com.lxg.spring.controller;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -28,11 +29,13 @@ import org.springframework.web.multipart.MultipartHttpServletRequest;
 
 import com.lxg.spring.dao.BarRepository;
 import com.lxg.spring.dao.ClientRepository;
+import com.lxg.spring.dao.DonutRepository;
 import com.lxg.spring.dao.FileUploadRepository;
 import com.lxg.spring.dao.LineRepository;
 import com.lxg.spring.dao.PolicyRepository;
 import com.lxg.spring.entity.BarTable;
 import com.lxg.spring.entity.ClientTable;
+import com.lxg.spring.entity.DonutTable;
 import com.lxg.spring.entity.FileUploadTable;
 import com.lxg.spring.entity.LineTable;
 import com.lxg.spring.entity.PolicyTable;
@@ -63,6 +66,10 @@ public class PolicyController {
     
 	@Autowired
 	public ReadExcel readExcel;
+	
+	@Autowired
+	public DonutRepository donutRepository;
+	
 	
 	@Autowired
 	FileUploadRepository fileUploadRepository;
@@ -178,44 +185,41 @@ public class PolicyController {
 	@ResponseBody
     public ResponseEntity<List<Donutvo>> getDonut()
     {
-		
+
 		List<Donutvo> result = new ArrayList<Donutvo>(); 
 		
-		Donutvo l1 = new Donutvo();
-		l1.setValue("50");
-		l1.setLabel("life 1");
-		l1.setFormatted("70% per");
+		List<DonutTable> donutList = donutRepository.findAll();
+		double sum = 0.0;
+		for(DonutTable item:donutList)
+		{
+			if(item != null)
+			{
+				sum+= Double.valueOf(item.getValue());
+			}
+		}
 		
-		Donutvo l2 = new Donutvo();
-		l2.setValue("100");
-		l2.setLabel("life 2");
-		l2.setFormatted("72% per");
-		
-		Donutvo l3 = new Donutvo();
-		l3.setValue("70");
-		l3.setLabel("life 3");
-		l3.setFormatted("77% per");
-		
-		Donutvo l4 = new Donutvo();
-		l4.setValue("70");
-		l4.setLabel("life 3");
-		l4.setFormatted("77% per");
-		
-		Donutvo l5 = new Donutvo();
-		l5.setValue("70");
-		l5.setLabel("life 3");
-		l5.setFormatted("77% per");
-		
-		
-		result.add(l1);
-		result.add(l2);
-		result.add(l3);
-		result.add(l4);
-		result.add(l5);
+		for(DonutTable item:donutList)
+		{
+			if(item!= null)
+			{
+				Donutvo donutvo = new Donutvo();
+				donutvo.setLabel(item.getLabel());
+				donutvo.setValue(item.getValue());
+				String per  =item.getValue() + " " + getNumberDecimalDigits(Double.valueOf(item.getValue())/sum * 100) + "% Per";
+				
+				donutvo.setFormatted(per);
+				result.add(donutvo);
+			}
+		}
+
 		
 		return ResponseEntity.ok().body(result);
     }
 	
+	 public static String getNumberDecimalDigits(double number) {
+		 DecimalFormat df = new DecimalFormat( "0.00");  
+		 return df.format(number);
+	    }
 	
 	@PostMapping(path = "/v1/create_info_post")
 	@ResponseBody
