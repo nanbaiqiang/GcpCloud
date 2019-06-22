@@ -1,9 +1,15 @@
 package com.lxg.spring.controller;
 
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.PrintStream;
+import java.nio.file.Paths;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -12,6 +18,10 @@ import java.util.Map;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.validation.Valid;
+
+import org.apache.tomcat.util.http.fileupload.FileItem;
+import org.apache.tomcat.util.http.fileupload.FileUploadException;
+import org.apache.tomcat.util.http.fileupload.disk.DiskFileItemFactory;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -27,6 +37,20 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.multipart.MultipartHttpServletRequest;
 
+
+import com.google.cloud.bigquery.FieldValueList;
+import com.google.cloud.bigquery.TableResult;
+import com.google.cloud.storage.Acl;
+import com.google.cloud.storage.Acl.Role;
+import com.google.cloud.storage.Acl.User;
+import com.google.cloud.storage.Blob;
+import com.google.cloud.storage.BlobId;
+import com.google.cloud.storage.BlobInfo;
+import com.google.cloud.storage.Bucket;
+import com.google.cloud.storage.BucketInfo;
+import com.google.cloud.storage.Storage;
+import com.google.cloud.storage.StorageOptions;
+import com.google.common.io.Files;
 import com.lxg.spring.dao.BarRepository;
 import com.lxg.spring.dao.ClientRepository;
 import com.lxg.spring.dao.DonutRepository;
@@ -39,9 +63,8 @@ import com.lxg.spring.entity.DonutTable;
 import com.lxg.spring.entity.FileUploadTable;
 import com.lxg.spring.entity.LineTable;
 import com.lxg.spring.entity.PolicyTable;
-import com.lxg.spring.security.JsonUtil;
-import com.lxg.spring.service.BigQueryDemo;
 import com.lxg.spring.service.ReadExcel;
+import com.lxg.spring.service.SimpleBigquery;
 import com.lxg.spring.vo.AreaVO;
 import com.lxg.spring.vo.BarVO;
 import com.lxg.spring.vo.Donutvo;
@@ -51,6 +74,9 @@ import com.lxg.spring.vo.RequestVO;
 
 @RestController
 public class PolicyController {
+
+	private  ByteArrayOutputStream bout;
+	private  PrintStream out;
 
     @Autowired
     private LineRepository lineRepository;
@@ -74,13 +100,8 @@ public class PolicyController {
 	@Autowired
 	FileUploadRepository fileUploadRepository;
 	
-    
-	@RequestMapping(value = "/v1/getLine", method = RequestMethod.GET)
-	@ResponseBody
-    public ResponseEntity<List<LineVO>> getLine(@RequestParam("sysname") String sysname)
-    {
-		//BigQueryDemo.implicit()
-		
+	private List<LineVO> getLineLocalSQl()
+	{
 		List<LineTable> policyList = lineRepository.findLineTableByYear("2011");
 		List<LineVO> result = new ArrayList<LineVO>(); 
 		for(LineTable row:policyList)
@@ -91,10 +112,46 @@ public class PolicyController {
 			result.add(lineItem);
 			
 		}
+		return result;
+	}
+    
+	@RequestMapping(value = "/v1/getLine", method = RequestMethod.GET)
+	@ResponseBody
+    public ResponseEntity<List<LineVO>> getLine(@RequestParam("sysname") String sysname)
+    {
+		  bout = new ByteArrayOutputStream();
+		  out = new PrintStream(bout);
+		  
+		TableResult resultBigquery=null; 
+		String sql="select * from `luminous-night-238606.client.line`";
+		try {
+			resultBigquery = SimpleBigquery.query(sql);
+		} catch (InterruptedException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		List<LineVO> result = new ArrayList<LineVO>(); 
+		
+	    if(resultBigquery != null)
+	    {
+		    for (FieldValueList row : resultBigquery.iterateAll()) {
+		        String year = row.get("YEAR").getStringValue();
+		      
+		        if("2011".equals(year)){
+				LineVO lineItem = new LineVO();
+				lineItem.setKey(row.get("POLICY_NUM").getStringValue());
+				lineItem.setValue(row.get("COUNT").getStringValue());
+				result.add(lineItem);
+		        }
+		    }
+
+	    }
+
+		//result  = getLineLocalSQl();
 //		String ss = JsonUtil.objectList2jsonArray(result);
 //		//System.out.println(ss);
 //		List<LineVO> result1 =  JsonUtil.json2ObjectList(ss);
-		
 		return ResponseEntity.ok().body(result);
     }
 	
@@ -185,7 +242,53 @@ public class PolicyController {
 	@ResponseBody
     public ResponseEntity<List<Donutvo>> getDonut()
     {
+		bout = new ByteArrayOutputStream();
+		out = new PrintStream(bout);
+		  
+		//List<Donutvo> result = getDonutLocalSql();
+		List<Donutvo> result = new ArrayList<Donutvo>(); 
+		
+		TableResult resultBigquery=null; 
+		String sql="select * from `luminous-night-238606.client.donut`";
+		try {
+			resultBigquery = SimpleBigquery.query(sql);
+		} catch (InterruptedException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		
+	    if(resultBigquery != null)
+	    {
+	    	double sum = 0.0;
+		    for (FieldValueList row : resultBigquery.iterateAll()) {
+				if(row != null)
+				{
+					sum+= Double.valueOf(row.get("value").getStringValue());
+				}
+		    }
+		    
+		    for (FieldValueList row : resultBigquery.iterateAll()) 
+			{
+				if(row != null)
+				{
+					Donutvo donutvo = new Donutvo();
+					donutvo.setLabel(row.get("label").getStringValue());
+					donutvo.setValue(row.get("value").getStringValue());
+					String per  =row.get("value").getStringValue() + 
+							" " + getNumberDecimalDigits(Double.valueOf(row.get("value").getStringValue())/sum * 100) + "% Per";
+					
+					donutvo.setFormatted(per);
+					result.add(donutvo);
+				}
+			}
 
+	    }
+		    
+		return ResponseEntity.ok().body(result);
+    }
+
+	private List<Donutvo> getDonutLocalSql() {
 		List<Donutvo> result = new ArrayList<Donutvo>(); 
 		
 		List<DonutTable> donutList = donutRepository.findAll();
@@ -211,10 +314,8 @@ public class PolicyController {
 				result.add(donutvo);
 			}
 		}
-
-		
-		return ResponseEntity.ok().body(result);
-    }
+		return result;
+	}
 	
 	 public static String getNumberDecimalDigits(double number) {
 		 DecimalFormat df = new DecimalFormat( "0.00");  
@@ -232,6 +333,46 @@ public class PolicyController {
 	@ResponseBody
     public ResponseEntity<List<ClientTable>> findClient(RequestVO req)
     {
+		//List<ClientTable> list = findClientLocalSQl(req);
+		bout = new ByteArrayOutputStream();
+		out = new PrintStream(bout);
+		  
+		TableResult resultBigquery=null; 
+		String sql="select * from `luminous-night-238606.client.client`";
+		try {
+			resultBigquery = SimpleBigquery.query(sql);
+		} catch (InterruptedException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		List<ClientTable> list = new ArrayList<ClientTable>(); 
+		
+	    if(resultBigquery != null)
+	    {
+		    for (FieldValueList row : resultBigquery.iterateAll()) {
+
+		        	ClientTable lineItem = new ClientTable();
+
+					lineItem.setClientNum(row.get("client_number").getStringValue());
+					lineItem.setCountry(row.get("country").getStringValue());
+					lineItem.setBrith(row.get("birthday").getStringValue());
+					lineItem.setAdress(row.get("adress").getStringValue());
+					lineItem.setGender(row.get("gender").getStringValue());
+					lineItem.setIdNum(row.get("id_number").getStringValue());
+					lineItem.setIdType(row.get("id_type").getStringValue());
+					lineItem.setMobil(row.get("mobil").getStringValue());
+					lineItem.setName(row.get("client_name").getStringValue());
+					lineItem.setRemark("there is nothing");
+					list.add(lineItem);
+		    }
+
+	    }
+	    
+		return ResponseEntity.ok().body(list);
+    }
+
+	private List<ClientTable> findClientLocalSQl(RequestVO req) {
 		List<ClientTable> list = null;
 		if("1".equals(req.getSearchType()))
 		{
@@ -241,16 +382,49 @@ public class PolicyController {
 		{
 			list = clientRepository.findClientTableByClientNum(req.getName());
 		}
-
-		return ResponseEntity.ok().body(list);
-    }
+		return list;
+	}
 	
 	@RequestMapping(value = "/v1/findPolicy", method = RequestMethod.POST)
 	@ResponseBody
 	//use @RequestBody not @RequestParam
     public ResponseEntity<List<PolicyTable>> findPolicy(@RequestBody RequestVO prama)
     {
-		List<PolicyTable> list =  policyRepository.findPolicyTableByClientNumber(prama.getClientNum());
+		//List<PolicyTable> list =  policyRepository.findPolicyTableByClientNumber(prama.getClientNum());
+		List<PolicyTable> list =  new ArrayList<PolicyTable>(); 
+		
+		bout = new ByteArrayOutputStream();
+		out = new PrintStream(bout);
+		  
+		TableResult resultBigquery=null; 
+		String sql="select * from `luminous-night-238606.client.policy`";
+		try {
+			resultBigquery = SimpleBigquery.query(sql);
+		} catch (InterruptedException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+
+	    if(resultBigquery != null)
+	    {
+		    for (FieldValueList row : resultBigquery.iterateAll()) {
+
+		    		PolicyTable lineItem = new PolicyTable();
+					lineItem.setClientNumber(row.get("client_number").getStringValue());
+					lineItem.setCurrency(row.get("currency").getStringValue());
+					lineItem.setIssueDate(row.get("issue_date").getStringValue());
+					lineItem.setPolicyId(row.get("policy_number").getStringValue());
+					lineItem.setPolicyName(row.get("policy_name").getStringValue());
+					lineItem.setProductType(row.get("product_type").getStringValue());
+					lineItem.setRid(row.get("rid").getStringValue());
+					lineItem.setStatus(row.get("status").getStringValue());
+					lineItem.setSummary(row.get("installed_premium").getStringValue());
+
+					list.add(lineItem);
+		    }
+
+	    }
+	    
 		return ResponseEntity.ok().body(list);
     }
 	
@@ -291,6 +465,9 @@ public Map<String, Object> uploadApkFile(HttpServletRequest request,HttpServletR
      for (Iterator i = map.keySet().iterator(); i.hasNext();) {
             Object obj = i.next();
             multipartFile=(MultipartFile) map.get(obj);
+            
+
+            uploadfileToStorage(multipartFile.getBytes(),multipartFile.getInputStream(),multipartFile.getOriginalFilename());
             readExcel.excel(multipartFile);
             
       }
@@ -298,6 +475,33 @@ public Map<String, Object> uploadApkFile(HttpServletRequest request,HttpServletR
     return json;
 }
 
+@SuppressWarnings("deprecation")
+public void uploadfileToStorage(byte[] fileByte,InputStream input,String fileName)
+{
+
+    Storage storage = StorageOptions.getDefaultInstance().getService();
+
+    // The name for the new bucket
+    String bucketName = "Policy_list";  // "my-new-bucket";
+
+    // Creates the new bucket
+//    Bucket bucket = storage.create(BucketInfo.of(bucketName));
+//    BlobId blobId = BlobId.of(bucketName, "my_blob_name");
+//    Blob blob = bucket.create("my_blob_name", fileByte, "text/plain");
+
+    //storage.delete("vendor-bucket3");
+    
+    BlobInfo blobInfo =
+            storage.create(
+                BlobInfo
+                    .newBuilder(bucketName, fileName)
+                    // Modify access list to allow all users with link to read file
+                    .setAcl(new ArrayList<>(Arrays.asList(Acl.of(User.ofAllUsers(), Role.READER))))
+                    .build(),
+                    input);
+        // return the public download link
+        String path =  blobInfo.getMediaLink();
+}
 
 @RequestMapping(value = "/v1/getFilelist", method = RequestMethod.GET)
 @ResponseBody

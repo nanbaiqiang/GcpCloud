@@ -25,6 +25,9 @@ import com.google.cloud.bigquery.JobInfo;
 import com.google.cloud.bigquery.QueryJobConfiguration;
 import com.google.cloud.bigquery.QueryResponse;
 import com.google.cloud.bigquery.TableResult;
+
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 import java.util.UUID;
 // [END bigquery_simple_app_deps]
 
@@ -34,9 +37,9 @@ public class SimpleBigquery {
 	  query(sql);
   }
   
-  public static void query(String sql) throws InterruptedException
+  public static TableResult query(String sql) throws InterruptedException
   {
-
+	  
 	    // [START bigquery_simple_app_client]
 	    BigQuery bigquery = BigQueryOptions.getDefaultInstance().getService();
 	    // [END bigquery_simple_app_client]
@@ -73,6 +76,7 @@ public class SimpleBigquery {
 	    for (FieldValueList row : result.iterateAll()) {
 	      String client_name = row.get("client_name").getStringValue();
 	    }
+	    return result;
 	    // [END bigquery_simple_app_print]
 	  
   }
